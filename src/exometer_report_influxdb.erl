@@ -87,7 +87,7 @@ exometer_init(Opts) ->
     Formatting = get_opt(formatting, Opts, ?DEFAULT_FORMATTING),
     Autosubscribe = get_opt(autosubscribe, Opts, ?DEFAULT_AUTOSUBSCRIBE),
     SubscriptionsMod = get_opt(subscriptions_module, Opts, ?DEFAULT_SUBSCRIPTIONS_MOD),
-    MergedTags = merge_tags([{<<"host">>, net_adm:localhost()}], Tags),
+    MergedTags = merge_tags([{<<"host">>, net_adm:localhost()}, {<<"node">>, node()}], Tags),
     State =  #state{protocol = Protocol,
                     db = DB,
                     username = Username,
@@ -174,12 +174,12 @@ exometer_cast(_Unknown, State) ->
 -spec exometer_info(any(), state()) -> callback_result().
 exometer_info({exometer_influxdb, reconnect}, State) ->
     reconnect(State);
-exometer_info({exometer_influxdb, send}, 
+exometer_info({exometer_influxdb, send},
               #state{precision = Precision,
                      collected_metrics = CollectedMetrics} = State) ->
     if CollectedMetrics /= #{} ->
         Packets = [make_packet(MetricName, Tags, Fileds, Timestamping, Precision) ++ "\n"
-                   || {_, {MetricName, Tags, Fileds, Timestamping}} 
+                   || {_, {MetricName, Tags, Fileds, Timestamping}}
                       <- maps:to_list(CollectedMetrics)],
         send(Packets, State#state{collected_metrics = #{}});
     true -> {ok, State}
@@ -188,8 +188,8 @@ exometer_info(_Unknown, State) ->
     {ok, State}.
 
 -spec exometer_newentry(exometer:entry(), state()) -> callback_result().
-exometer_newentry(#exometer_entry{name = Name, type = Type} = _Entry, 
-                  #state{autosubscribe = Autosubscribe, 
+exometer_newentry(#exometer_entry{name = Name, type = Type} = _Entry,
+                  #state{autosubscribe = Autosubscribe,
                          subscriptions_module = Module} = State) ->
     case {Autosubscribe, Module} of
         {true, undefined} ->
@@ -226,12 +226,12 @@ connect(Proto, Host, Port, Username, Password) when ?HTTP(Proto) ->
         _ -> [{basic_auth, {Username, Password}}]
     end ++ [{pool, false}],
     Transport = case Proto of
-        http -> 
+        http ->
             case code:is_loaded(hackney_tcp) of
                 false ->  hackney_tcp_transport;
                 _ -> hackney_tcp
             end;
-        https -> 
+        https ->
             case code:is_loaded(hackney_ssl) of
                false ->  hackney_ssl_transport;
                _ -> hackney_ssl
@@ -274,8 +274,8 @@ prepare_reconnect() ->
 
 -spec maybe_send(list(), list(), map(), map(), state()) ->
     {ok, state()} | {error, term()}.
-maybe_send(OriginMetricName, MetricName, Tags0, Fields, 
-           #state{batch_window_size = BatchWinSize, 
+maybe_send(OriginMetricName, MetricName, Tags0, Fields,
+           #state{batch_window_size = BatchWinSize,
                   precision = Precision,
                   timestamping = Timestamping,
                   collected_metrics = CollectedMetrics} = State)
@@ -283,17 +283,17 @@ maybe_send(OriginMetricName, MetricName, Tags0, Fields,
     NewCollectedMetrics = case maps:get(OriginMetricName, CollectedMetrics, not_found) of
         {MetricName, Tags, Fields1} ->
             NewFields = maps:merge(Fields, Fields1),
-            maps:put(OriginMetricName, 
-                     {MetricName, Tags, NewFields, Timestamping andalso unix_time(Precision)}, 
+            maps:put(OriginMetricName,
+                     {MetricName, Tags, NewFields, Timestamping andalso unix_time(Precision)},
                      CollectedMetrics);
         {MetricName, Tags, Fields1, _OrigTimestamp} ->
             NewFields = maps:merge(Fields, Fields1),
             maps:put(OriginMetricName,
                      {MetricName, Tags, NewFields, Timestamping andalso unix_time(Precision)},
                      CollectedMetrics);
-        not_found -> 
-            maps:put(OriginMetricName, 
-                     {MetricName, Tags0, Fields, Timestamping andalso unix_time(Precision)}, 
+        not_found ->
+            maps:put(OriginMetricName,
+                     {MetricName, Tags0, Fields, Timestamping andalso unix_time(Precision)},
                      CollectedMetrics)
     end,
     maps:size(CollectedMetrics) == 0 andalso prepare_batch_send(BatchWinSize),
@@ -356,7 +356,7 @@ subscribe({Name, DataPoint, Interval, Extra, Retry}) when is_boolean(Retry) ->
     exometer_report:subscribe(?MODULE, Name, DataPoint, Interval, Extra, Retry);
 subscribe({Name, DataPoint, Interval, Extra}) ->
     exometer_report:subscribe(?MODULE, Name, DataPoint, Interval, Extra);
-subscribe(_Name) -> 
+subscribe(_Name) ->
     [].
 
 -spec get_opt(atom(), list(), any()) -> any().
@@ -443,7 +443,7 @@ flatten_tags(Tags) ->
                 end, [], lists:keysort(1, Tags)).
 
 -spec make_packet(exometer_report:metric(), map() | list(),
-                  map(), boolean() | non_neg_integer(), precision()) -> 
+                  map(), boolean() | non_neg_integer(), precision()) ->
     list().
 make_packet(Measurement, Tags, Fields, Timestamping, Precision) ->
     BinaryTags = flatten_tags(Tags),
@@ -504,12 +504,12 @@ evaluate_subscription_options(MetricId, Options, DefaultTags, DefaultSeriesName,
     FinalTags = merge_tags(DefaultTags, TagMap),
     {FinalMetricId, FinalTags}.
 
--spec evaluate_subscription_tags(list(), [{atom(), value()}]) -> 
+-spec evaluate_subscription_tags(list(), [{atom(), value()}]) ->
     {list(), [{atom(), value()}], [integer()]}.
 evaluate_subscription_tags(MetricId, TagOpts) ->
     evaluate_subscription_tags(MetricId, TagOpts, [], []).
 
--spec evaluate_subscription_tags(list(), [{atom(), value()}], [{atom(), value()}], [integer()]) -> 
+-spec evaluate_subscription_tags(list(), [{atom(), value()}], [{atom(), value()}], [integer()]) ->
     {list(), [{atom(), value()}], [integer()]}.
 evaluate_subscription_tags(MetricId, [], TagAcc, PosAcc) ->
     {MetricId, TagAcc, PosAcc};
@@ -551,4 +551,3 @@ evaluate_subscription_formatting({MetricId, Tags, FromNameIndices}, FormattingOp
                                         -> {list() | atom(), [{atom(), value()}]}.
 evaluate_subscription_series_name({MetricId, Tags}, undefined) -> {MetricId, Tags};
 evaluate_subscription_series_name({_MetricId, Tags}, SeriesName) -> {SeriesName, Tags}.
-
